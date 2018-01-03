@@ -501,6 +501,7 @@ static NSString *bundleResourceSubdirectory = nil;
     [self loadBundle];
 }
 
+
 /*
  * When an update failed to apply, this method can be called
  * to store its hash so that it can be ignored on future
@@ -608,6 +609,308 @@ static NSString *bundleResourceSubdirectory = nil;
 -(void)loadBundleOnTick:(NSTimer *)timer {
     [self loadBundle];
 }
+                  
+                  
+                  
+
+/*
+ * This method is the native side of the LocalPackage.install method.
+ */
+- (BOOL)installUpdateNative:(NSDictionary*)updatePackage
+                  installMode:(CodePushInstallMode)installMode
+                  minimumBackgroundDuration:(int)minimumBackgroundDuration
+{
+    NSError *error;
+    [CodePushPackage installPackage:updatePackage
+                removePendingUpdate:[[self class] isPendingUpdate:nil]
+                              error:&error];
+    BOOL isSucess;
+    
+    if (error) {
+        isSucess = NO;
+       // reject([NSString stringWithFormat: @"%lu", (long)error.code], error.localizedDescription, error);
+    } else {
+        [self savePendingUpdate:updatePackage[PackageHashKey]
+                      isLoading:NO];
+        
+        _installMode = installMode;
+        if (_installMode == CodePushInstallModeOnNextResume || _installMode == CodePushInstallModeOnNextSuspend) {
+            _minimumBackgroundDuration = minimumBackgroundDuration;
+            
+            if (!_hasResumeListener) {
+                // Ensure we do not add the listener twice.
+                // Register for app resume notifications so that we
+                // can check for pending updates which support "restart on resume"
+                [[NSNotificationCenter defaultCenter] addObserver:self
+                                                         selector:@selector(applicationWillEnterForeground)
+                                                             name:UIApplicationWillEnterForegroundNotification
+                                                           object:RCTSharedApplication()];
+                
+                [[NSNotificationCenter defaultCenter] addObserver:self
+                                                         selector:@selector(applicationWillResignActive)
+                                                             name:UIApplicationWillResignActiveNotification
+                                                           object:RCTSharedApplication()];
+                
+                _hasResumeListener = YES;
+            }
+        }
+        
+        // Signal to JS that the update has been applied.
+      //  resolve(nil);
+        isSucess = YES;
+    }
+    return isSucess;
+}
+
+/*
+ * This method is the native side of the CodePush.getUpdateMetadata method.
+ */
+-(NSDictionary *)getUpdateMetadataNative:(CodePushUpdateState)updateState
+{
+    NSError *error;
+    NSMutableDictionary *package = [[CodePushPackage getCurrentPackage:&error] mutableCopy];
+    
+    
+    if (error) {
+        return;
+    } else if (package == nil) {
+        // The app hasn't downloaded any CodePush updates yet,
+        // so we simply return nil regardless if the user
+        // wanted to retrieve the pending or running update.
+        return;
+    }
+    
+    // We have a CodePush update, so let's see if it's currently in a pending state.
+    BOOL currentUpdateIsPending = [[self class] isPendingUpdate:[package objectForKey:PackageHashKey]];
+    
+    if (updateState == CodePushUpdateStatePending && !currentUpdateIsPending) {
+        // The caller wanted a pending update
+        // but there isn't currently one.
+        //resolve(nil);
+    } else if (updateState == CodePushUpdateStateRunning && currentUpdateIsPending) {
+        // The caller wants the running update, but the current
+        // one is pending, so we need to grab the previous.
+        return [CodePushPackage getPreviousPackage:&error];
+    } else {
+        // The current package satisfies the request:
+        // 1) Caller wanted a pending, and there is a pending update
+        // 2) Caller wanted the running update, and there isn't a pending
+        // 3) Caller wants the latest update, regardless if it's pending or not
+        if (isRunningBinaryVersion) {
+            // This only matters in Debug builds. Since we do not clear "outdated" updates,
+            // we need to indicate to the JS side that somehow we have a current update on
+            // disk that is not actually running.
+            [package setObject:@(YES) forKey:@"_isDebugOnly"];
+        }
+        
+        // Enable differentiating pending vs. non-pending updates
+        [package setObject:@(currentUpdateIsPending) forKey:PackageIsPendingKey];
+       // resolve(package);
+    }
+    return package;
+}
+
+/*
+ * This is the native side of the CodePush.getConfiguration method.now i change it to a pure native method. It isn't
+ * currently exposed via the "react-native-code-push" module, and is used
+ * internally only by the CodePush.checkForUpdate method in order to get the
+ * app version, as well as the deployment key that was configured in the Info.plist file.
+ */
+- (NSDictionary *)getConfigurationNative
+{
+    NSDictionary *configuration = [[CodePushConfig current] configuration];
+    NSError *error;
+    if (isRunningBinaryVersion) {
+        // isRunningBinaryVersion will not get set to "YES" if running against the packager.
+        NSString *binaryHash = [CodePushUpdateUtils getHashForBinaryContents:[CodePush binaryBundleURL] error:&error];
+        if (error) {
+           // CPLog(@"Error obtaining hash for binary contents: %@", error);
+            //resolve(configuration);
+            return;
+        }
+        
+        if (binaryHash == nil) {
+            // The hash was not generated either due to a previous unknown error or the fact that
+            // the React Native assets were not bundled in the binary (e.g. during dev/simulator)
+            // builds.
+           // resolve(configuration);
+            return;
+        }
+        
+        NSMutableDictionary *mutableConfiguration = [configuration mutableCopy];
+        [mutableConfiguration setObject:binaryHash forKey:PackageHashKey];
+      //  resolve(mutableConfiguration);
+        return mutableConfiguration.copy;
+    }
+    return configuration;
+  //  resolve(configuration);
+}
+/*
+ * this is a native-side method but i change it to pure native method
+ */
+- (NSDictionary *)downloadUpdateNative:(NSDictionary*)updatePackage
+                  notifyProgress:(BOOL)notifyProgress
+{
+    NSDictionary *mutableUpdatePackage = [updatePackage mutableCopy];
+    NSURL *binaryBundleURL = [CodePush binaryBundleURL];
+    if (binaryBundleURL != nil) {
+        [mutableUpdatePackage setValue:[CodePushUpdateUtils modifiedDateStringOfFileAtURL:binaryBundleURL]
+                                forKey:BinaryBundleDateKey];
+    }
+    
+    if (notifyProgress) {
+        // Set up and unpause the frame observer so that it can emit
+        // progress events every frame if the progress is updated.
+        _didUpdateProgress = NO;
+        self.paused = NO;
+    }
+    
+    NSString * publicKey = [[CodePushConfig current] publicKey];
+    NSDictionary *resultDic = [NSDictionary new];
+    [CodePushPackage
+     downloadPackage:mutableUpdatePackage
+     expectedBundleFileName:[bundleResourceName stringByAppendingPathExtension:bundleResourceExtension]
+     publicKey:publicKey
+     operationQueue:_methodQueue
+     // The download is progressing forward
+     progressCallback:^(long long expectedContentLength, long long receivedContentLength) {
+         // Update the download progress so that the frame observer can notify the JS side
+         _latestExpectedContentLength = expectedContentLength;
+         _latestReceivedConentLength = receivedContentLength;
+         _didUpdateProgress = YES;
+         
+         // If the download is completed, stop observing frame
+         // updates and synchronously send the last event.
+         if (expectedContentLength == receivedContentLength) {
+             _didUpdateProgress = NO;
+             self.paused = YES;
+             [self dispatchDownloadProgressEvent];
+         }
+     }
+     // The download completed
+     doneCallback:^{
+         NSError *err;
+         NSDictionary *newPackage = [CodePushPackage getPackage:mutableUpdatePackage[PackageHashKey] error:&err];
+         
+         if (err) {
+            // return reject([NSString stringWithFormat: @"%lu", (long)err.code], err.localizedDescription, err);
+             return;
+         }
+         resultDic = newPackage;
+     }
+     // The download failed
+     failCallback:^(NSError *err) {
+         if ([CodePushErrorUtils isCodePushError:err]) {
+             [self saveFailedUpdate:mutableUpdatePackage];
+         }
+         
+         // Stop observing frame updates if the download fails.
+         _didUpdateProgress = NO;
+         self.paused = YES;
+        // reject([NSString stringWithFormat: @"%lu", (long)err.code], err.localizedDescription, err);
+     }];
+    return resultDic;
+}
+
+/*
+ * This method isn't publicly exposed via the "react-native-code-push"
+ * module, and is only used internally to populate the RemotePackage.failedInstall property.
+ */
+- (BOOL)isFailedUpdateNative:(NSString *)packageHash
+{
+     return [[self class] isFailedHash:packageHash];
+}
+                  
+/*
+ * This method isn't publicly exposed via the "react-native-code-push"
+ * module, and is only used internally to populate the LocalPackage.isFirstRun property.
+ */
+- (BOOL)isFirstRunNative:(NSString *)packageHash
+{
+    NSError *error;
+    BOOL isFirstRun = _isFirstRunAfterUpdate
+    && nil != packageHash
+    && [packageHash length] > 0
+    && [packageHash isEqualToString:[CodePushPackage getCurrentPackageHash:&error]];
+    return  isFirstRun;
+}
+/*
+ * This method is the native side of the CodePush.notifyApplicationReady() method.
+ */
+- (void)notifyApplicationReadyNative
+{
+    [CodePush removePendingUpdate];
+}
+
+/*
+ * This method is the native side of the CodePush.restartApp() method.
+ */
+- (void)restartAppNative:(BOOL)onlyIfUpdateIsPending
+{
+    if (!onlyIfUpdateIsPending || [[self class] isPendingUpdate:nil]) {
+        [self loadBundle];
+        return;
+    }
+}
+
+/*
+ * This method is the native side of the CodePush.downloadAndReplaceCurrentBundle()
+ * method, which replaces the current bundle with the one downloaded from
+ * removeBundleUrl. It is only to be used during tests and no-ops if the test
+ * configuration flag is not set.
+ */
+- (void)downloadAndReplaceCurrentBundleNative:(NSString *)remoteBundleUrl
+{
+    if ([CodePush isUsingTestConfiguration]) {
+        [CodePushPackage downloadAndReplaceCurrentBundle:remoteBundleUrl];
+    }
+}
+
+/*
+ * This method is checks if a new status update exists (new version was installed,
+ * or an update failed) and return its details (version label, status).
+ */
+- (NSDictionary *)getNewStatusReportNative
+{
+    if (needToReportRollback) {
+        needToReportRollback = NO;
+        NSUserDefaults *preferences = [NSUserDefaults standardUserDefaults];
+        NSMutableArray *failedUpdates = [preferences objectForKey:FailedUpdatesKey];
+        if (failedUpdates) {
+            NSDictionary *lastFailedPackage = [failedUpdates lastObject];
+            if (lastFailedPackage) {
+               return [CodePushTelemetryManager getRollbackReport:lastFailedPackage];
+            }
+        }
+    } else if (_isFirstRunAfterUpdate) {
+        NSError *error;
+        NSDictionary *currentPackage = [CodePushPackage getCurrentPackage:&error];
+        if (!error && currentPackage) {
+            return [CodePushTelemetryManager getUpdateReport:currentPackage]);
+        }
+    } else if (isRunningBinaryVersion) {
+        NSString *appVersion = [[CodePushConfig current] appVersion];
+        return [CodePushTelemetryManager getBinaryUpdateReport:appVersion]);
+        return;
+    } else {
+        NSDictionary *retryStatusReport = [CodePushTelemetryManager getRetryStatusReport];
+        if (retryStatusReport) {
+            return retryStatusReport;
+        }
+    }
+    
+    return @{};
+}
+
+- (void)recordStatusReportedNative:(NSDictionary *)statusReport
+{
+    [CodePushTelemetryManager recordStatusReported:statusReport];
+}
+- (void)saveStatusReportForRetryNative:(NSDictionary *)statusReport
+{
+    [CodePushTelemetryManager saveStatusReportForRetry:statusReport];
+}
+
 
 #pragma mark - JavaScript-exported module methods (Public)
 

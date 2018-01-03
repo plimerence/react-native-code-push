@@ -41,7 +41,21 @@
 + (NSString *)getApplicationSupportDirectory;
 
 + (NSString *)bundleAssetsPath;
-
+- (NSDictionary *)downloadUpdateNative:(NSDictionary*)updatePackage
+                        notifyProgress:(BOOL)notifyProgress;
+- (NSDictionary *)getConfigurationNative;
+- (NSDictionary *)getUpdateMetadataNative:(CodePushUpdateState)updateState;
+- (BOOL)installUpdateNative:(NSDictionary*)updatePackage
+                    installMode:(CodePushInstallMode)installMode
+                     minimumBackgroundDuration:(int)minimumBackgroundDuration;
+- (BOOL)isFailedUpdateNative:(NSString *)packageHash;
+- (BOOL)isFirstRunNative:(NSString *)packageHash;
+- (void)notifyApplicationReadyNative;
+- (void)restartAppNative:(BOOL)onlyIfUpdateIsPending;
+- (NSDictionary *)getNewStatusReportNative;
+- (void)recordStatusReportedNative:(NSDictionary *)statusReport;
+- (void)saveStatusReportForRetryNative:(NSDictionary *)statusReport;
+- (void)downloadAndReplaceCurrentBundleNative:(NSString *)remoteBundleUrl;
 /*
  * This method allows the version of the app's binary interface
  * to be specified, which would otherwise default to the
@@ -132,6 +146,7 @@ failCallback:(void (^)(NSError *err))failCallback;
 + (NSString *)getCurrentPackageFolderPath:(NSError **)error;
 + (NSString *)getCurrentPackageBundlePath:(NSError **)error;
 + (NSString *)getCurrentPackageHash:(NSError **)error;
+
 
 + (NSDictionary *)getPackage:(NSString *)packageHash
                        error:(NSError **)error;

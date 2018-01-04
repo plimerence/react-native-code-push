@@ -8,6 +8,19 @@
 
 #import <Foundation/Foundation.h>
 
+typedef NS_ENUM(NSInteger, CodePushInstallMode) {
+    CodePushInstallModeImmediate,
+    CodePushInstallModeOnNextRestart,
+    CodePushInstallModeOnNextResume,
+    CodePushInstallModeOnNextSuspend
+};
+
+typedef NS_ENUM(NSInteger, CodePushUpdateState) {
+    CodePushUpdateStateRunning,
+    CodePushUpdateStatePending,
+    CodePushUpdateStateLatest
+};
+
 @interface CodePush : RCTEventEmitter
 
 + (NSURL *)binaryBundleURL;
@@ -55,6 +68,7 @@
 - (NSDictionary *)getNewStatusReportNative;
 - (void)recordStatusReportedNative:(NSDictionary *)statusReport;
 - (void)saveStatusReportForRetryNative:(NSDictionary *)statusReport;
+//
 - (void)downloadAndReplaceCurrentBundleNative:(NSString *)remoteBundleUrl;
 /*
  * This method allows the version of the app's binary interface
@@ -217,15 +231,3 @@ failCallback:(void (^)(NSError *err))failCallback;
 
 void CPLog(NSString *formatString, ...);
 
-typedef NS_ENUM(NSInteger, CodePushInstallMode) {
-    CodePushInstallModeImmediate,
-    CodePushInstallModeOnNextRestart,
-    CodePushInstallModeOnNextResume,
-    CodePushInstallModeOnNextSuspend
-};
-
-typedef NS_ENUM(NSInteger, CodePushUpdateState) {
-    CodePushUpdateStateRunning,
-    CodePushUpdateStatePending,
-    CodePushUpdateStateLatest
-};

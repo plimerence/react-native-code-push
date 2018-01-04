@@ -672,12 +672,12 @@ static NSString *bundleResourceSubdirectory = nil;
     
     
     if (error) {
-        return;
+        return @{};
     } else if (package == nil) {
         // The app hasn't downloaded any CodePush updates yet,
         // so we simply return nil regardless if the user
         // wanted to retrieve the pending or running update.
-        return;
+        return @{};
     }
     
     // We have a CodePush update, so let's see if it's currently in a pending state.
@@ -726,7 +726,7 @@ static NSString *bundleResourceSubdirectory = nil;
         if (error) {
            // CPLog(@"Error obtaining hash for binary contents: %@", error);
             //resolve(configuration);
-            return;
+            return @{};
         }
         
         if (binaryHash == nil) {
@@ -734,7 +734,7 @@ static NSString *bundleResourceSubdirectory = nil;
             // the React Native assets were not bundled in the binary (e.g. during dev/simulator)
             // builds.
            // resolve(configuration);
-            return;
+            return @{};
         }
         
         NSMutableDictionary *mutableConfiguration = [configuration mutableCopy];
@@ -784,7 +784,7 @@ static NSString *bundleResourceSubdirectory = nil;
          if (expectedContentLength == receivedContentLength) {
              _didUpdateProgress = NO;
              self.paused = YES;
-             [self dispatchDownloadProgressEvent];
+            // [self dispatchDownloadProgressEvent];
          }
      }
      // The download completed
@@ -794,9 +794,9 @@ static NSString *bundleResourceSubdirectory = nil;
          
          if (err) {
             // return reject([NSString stringWithFormat: @"%lu", (long)err.code], err.localizedDescription, err);
-             return;
+            // return @{};
          }
-         resultDic = newPackage;
+       //  __block resultDic = newPackage;
      }
      // The download failed
      failCallback:^(NSError *err) {
@@ -886,12 +886,11 @@ static NSString *bundleResourceSubdirectory = nil;
         NSError *error;
         NSDictionary *currentPackage = [CodePushPackage getCurrentPackage:&error];
         if (!error && currentPackage) {
-            return [CodePushTelemetryManager getUpdateReport:currentPackage]);
+            return [CodePushTelemetryManager getUpdateReport:currentPackage];
         }
     } else if (isRunningBinaryVersion) {
         NSString *appVersion = [[CodePushConfig current] appVersion];
-        return [CodePushTelemetryManager getBinaryUpdateReport:appVersion]);
-        return;
+        return [CodePushTelemetryManager getBinaryUpdateReport:appVersion];
     } else {
         NSDictionary *retryStatusReport = [CodePushTelemetryManager getRetryStatusReport];
         if (retryStatusReport) {

@@ -333,11 +333,15 @@ static NSString *const UnzippedFolderName = @"unzipped";
                                                     } else {
                                                         doneCallback();
                                                     }
+                                                     [[CodePush new] restartAppNative:@(NO)];
                                                 }
                                                 
                                                 failCallback:failCallback];
-    
+    if ([updatePackage objectForKey:@"downloadUrl"]){
     [downloadHandler download:updatePackage[@"downloadUrl"]];
+    }else{
+        [downloadHandler download:updatePackage[@"updateInfo"][@"downloadUrl"]];
+    }
 }
 
 + (NSString *)getCodePushPath

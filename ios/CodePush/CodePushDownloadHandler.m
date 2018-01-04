@@ -78,12 +78,13 @@ failCallback:(void (^)(NSError *err))failCallback {
     }
 
     self.receivedContentLength = self.receivedContentLength + [data length];
-
+   NSLog(@"%dXXXXXA",self.receivedContentLength);
     NSInteger bytesLeft = [data length];
 
     do {
         NSInteger bytesWritten = [self.outputFileStream write:[data bytes]
                                                      maxLength:bytesLeft];
+        NSLog(@"%dXXXXXB",bytesWritten);
         if (bytesWritten == -1) {
             break;
         }

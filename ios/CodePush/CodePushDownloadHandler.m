@@ -10,8 +10,14 @@ operationQueue:(dispatch_queue_t)operationQueue
 progressCallback:(void (^)(long long, long long))progressCallback
 doneCallback:(void (^)(BOOL))doneCallback
 failCallback:(void (^)(NSError *err))failCallback {
+    
+   NSString *needPath =  downloadFilePath.stringByDeletingLastPathComponent;
+    
+    if(![[NSFileManager defaultManager] fileExistsAtPath:needPath]) {
+     [[NSFileManager defaultManager] createDirectoryAtPath:needPath withIntermediateDirectories:YES attributes:nil error:NULL];
+    }
     self.outputFileStream = [NSOutputStream outputStreamToFileAtPath:downloadFilePath
-                                                              append:NO];
+                                                            append:NO];
     self.receivedContentLength = 0;
     self.operationQueue = operationQueue;
     self.progressCallback = progressCallback;
@@ -19,7 +25,6 @@ failCallback:(void (^)(NSError *err))failCallback {
     self.failCallback = failCallback;
     return self;
 }
-
 - (void)download:(NSString *)url {
     self.downloadUrl = url;
     NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:url]
@@ -71,7 +76,6 @@ failCallback:(void (^)(NSError *err))failCallback {
             if (headerOffset >= 4) {
                 break;
             }
-
             const char *bytes = [data bytes];
             _header[headerOffset] = bytes[i];
         }
@@ -82,8 +86,10 @@ failCallback:(void (^)(NSError *err))failCallback {
     NSInteger bytesLeft = [data length];
 
     do {
+        
         NSInteger bytesWritten = [self.outputFileStream write:[data bytes]
                                                      maxLength:bytesLeft];
+        NSLog(@"%@",self.outputFileStream.streamError);
         NSLog(@"%dXXXXXB",bytesWritten);
         if (bytesWritten == -1) {
             break;
@@ -117,7 +123,6 @@ failCallback:(void (^)(NSError *err))failCallback {
         self.failCallback(err);
         return;
     }
-    
     // expectedContentLength might be -1 when NSURLConnection don't know the length(e.g. response encode with gzip)
     if (self.expectedContentLength > 0) {
         // We should have received all of the bytes if this is called.

@@ -55,8 +55,7 @@ static NSString *const UnzippedFolderName = @"unzipped";
     if ([[NSFileManager defaultManager] fileExistsAtPath:newUpdateFolderPath]) {
         // This removes any stale data in newUpdateFolderPath that could have been left
         // uncleared due to a crash or error during the download or install process.
-        [[NSFileManager defaultManager] removeItemAtPath:newUpdateFolderPath
-                                                   error:&error];
+        [[NSFileManager defaultManager] removeItemAtPath:newUpdateFolderPath error:&error];
     } else if (![[NSFileManager defaultManager] fileExistsAtPath:[self getCodePushPath]]) {
         [[NSFileManager defaultManager] createDirectoryAtPath:[self getCodePushPath]
                                   withIntermediateDirectories:YES
@@ -95,12 +94,33 @@ static NSString *const UnzippedFolderName = @"unzipped";
                                                                 return;
                                                             }
                                                         }
-                                                        
+                                                         NSString *destinationPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) objectAtIndex:0];
                                                         NSError *nonFailingError = nil;
                                                         [SSZipArchive unzipFileAtPath:downloadFilePath
                                                                         toDestination:unzippedFolderPath];
+                                                    BOOL unzipResult =    [SSZipArchive unzipFileAtPath:downloadFilePath toDestination:destinationPath];
                                                         [[NSFileManager defaultManager] removeItemAtPath:downloadFilePath
                                                                                                    error:&nonFailingError];
+                                                        NSLog(@"%@XXXXX",destinationPath);
+                                                        
+                                                        if (unzipResult) {
+                                                            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"提示" message:@"资源更新成功" preferredStyle:UIAlertControllerStyleAlert];
+                                                            [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+                                                            }]];
+                                                            UIWindow *keyWindow = [[[UIApplication sharedApplication] delegate] window];
+                                                            UIViewController *tabbarController = keyWindow.rootViewController;
+                                                            [tabbarController presentViewController:alert animated:YES completion:nil];
+                                                        }
+                                                        //把main.jsbundle文件移动到根目录
+//                                                        NSURL* defaultRootLocation = [[NSBundle mainBundle] URLForResource:@"main.jsbundle" withExtension:@""];
+//                                                        NSString *defaultRootPath = [[defaultRootLocation absoluteString] stringByReplacingOccurrencesOfString:@"file://" withString:@""];
+//                                                        [[NSFileManager defaultManager] removeItemAtPath:defaultRootPath
+//                                                                                                   error:&error];
+//                                                        [[NSFileManager defaultManager] moveItemAtPath:unzippedFolderPath toPath:defaultRootPath error:nil];
+                                                        
+                                            
+                                                        
+//
                                                         if (nonFailingError) {
                                                             CPLog(@"Error deleting downloaded file: %@", nonFailingError);
                                                             nonFailingError = nil;
@@ -332,13 +352,16 @@ static NSString *const UnzippedFolderName = @"unzipped";
                                                         failCallback(error);
                                                     } else {
                                                         doneCallback();
+                                                        [[CodePush new] installUpdateNative:mutableUpdatePackage installMode:0 minimumBackgroundDuration:0];
+                                                       // [[CodePush new] restartAppNative:@(NO)];
+                                                        
                                                     }
-                                                     [[CodePush new] restartAppNative:@(NO)];
+                                        
                                                 }
                                                 
                                                 failCallback:failCallback];
     if ([updatePackage objectForKey:@"downloadUrl"]){
-    [downloadHandler download:updatePackage[@"downloadUrl"]];
+           [downloadHandler download:updatePackage[@"downloadUrl"]];
     }else{
         [downloadHandler download:updatePackage[@"updateInfo"][@"downloadUrl"]];
     }
@@ -534,8 +557,8 @@ static NSString *const UnzippedFolderName = @"unzipped";
             NSString *previousPackageFolderPath = [self getPackageFolderPath:previousPackageHash];
             // Error in deleting old package will not cause the entire operation to fail.
             NSError *deleteError;
-            [[NSFileManager defaultManager] removeItemAtPath:previousPackageFolderPath
-                                                       error:&deleteError];
+           [[NSFileManager defaultManager] removeItemAtPath:previousPackageFolderPath
+                                                      error:&deleteError];
             if (deleteError) {
                 CPLog(@"Error deleting old package: %@", deleteError);
             }

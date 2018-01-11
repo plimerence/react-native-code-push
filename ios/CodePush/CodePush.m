@@ -157,6 +157,7 @@ static NSString *bundleResourceSubdirectory = nil;
     if (error || !packageFile) {
         CPLog(logMessageFormat, binaryBundleURL);
         isRunningBinaryVersion = YES;
+             NSLog(@"%@xxx",binaryBundleURL);
         return binaryBundleURL;
     }
 
@@ -165,6 +166,7 @@ static NSString *bundleResourceSubdirectory = nil;
     if (error || !currentPackageMetadata) {
         CPLog(logMessageFormat, binaryBundleURL);
         isRunningBinaryVersion = YES;
+   
         return binaryBundleURL;
     }
 
@@ -393,7 +395,7 @@ static NSString *bundleResourceSubdirectory = nil;
             // Therefore, deduce that it is a broken update and rollback.
             CPLog(@"Update did not finish loading the last time, rolling back to a previous version.");
             needToReportRollback = YES;
-            [self rollbackPackage];
+           // [self rollbackPackage];
         } else {
             // Mark that we tried to initialize the new update, so that if it crashes,
             // we will know that we need to rollback when the app next starts.
@@ -620,8 +622,10 @@ static NSString *bundleResourceSubdirectory = nil;
                   installMode:(CodePushInstallMode)installMode
                   minimumBackgroundDuration:(int)minimumBackgroundDuration
 {
+    NSMutableDictionary *dic =  [NSMutableDictionary dictionaryWithDictionary:updatePackage[@"updateInfo"]];
+    [dic setObject:@"main.jsbundle" forKey:@"bundlePath"];
     NSError *error;
-    [CodePushPackage installPackage:updatePackage
+    [CodePushPackage installPackage:dic
                 removePendingUpdate:[[self class] isPendingUpdate:nil]
                               error:&error];
     BOOL isSucess;
@@ -630,7 +634,7 @@ static NSString *bundleResourceSubdirectory = nil;
         isSucess = NO;
        // reject([NSString stringWithFormat: @"%lu", (long)error.code], error.localizedDescription, error);
     } else {
-        [self savePendingUpdate:updatePackage[PackageHashKey]
+        [self savePendingUpdate:dic[PackageHashKey]
                       isLoading:NO];
         
         _installMode = installMode;
